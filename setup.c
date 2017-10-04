@@ -1126,7 +1126,9 @@ const char *setup_git_directory_gently(int *nongit_ok)
 			repo_set_gitdir(the_repository, gitdir);
 			setup_git_env();
 		}
-		repo_set_hash_algo(the_repository, repo_fmt.hash_algo);
+		/* This is only valid if we actually found a repository */
+		if (startup_info->have_repository)
+			repo_set_hash_algo(the_repository, repo_fmt.hash_algo);
 	}
 
 	strbuf_release(&dir);
