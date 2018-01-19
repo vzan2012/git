@@ -4,7 +4,7 @@
 #include "parse-options.h"
 #include "grep.h"
 #include "notes.h"
-#include "commit.h"
+#include "pretty.h"
 #include "diff.h"
 
 /* Remember to update object flag allocation in object.h */
@@ -96,6 +96,7 @@ struct rev_info {
 			topo_order:1,
 			simplify_merges:1,
 			simplify_by_decoration:1,
+			single_worktree:1,
 			tag_objects:1,
 			tree_objects:1,
 			blob_objects:1,
@@ -120,7 +121,8 @@ struct rev_info {
 			bisect:1,
 			ancestry_path:1,
 			first_parent_only:1,
-			line_level_traverse:1;
+			line_level_traverse:1,
+			tree_blobs_in_commit_order:1;
 
 	/* Diff flags */
 	unsigned int	diff:1,
@@ -149,6 +151,17 @@ struct rev_info {
 			date_mode_explicit:1,
 			preserve_subject:1;
 	unsigned int	disable_stdin:1;
+	/*
+	 * Set `leak_pending` to prevent `prepare_revision_walk()` from clearing
+	 * the array of pending objects (`pending`). It will still forget about
+	 * the array and its entries, so they really are leaked. This can be
+	 * useful if the `struct object_array` `pending` is copied before
+	 * calling `prepare_revision_walk()`. By setting `leak_pending`, you
+	 * effectively claim ownership of the old array, so you should most
+	 * likely call `object_array_clear(&pending_copy)` once you are done.
+	 * Observe that this is about ownership of the array and its entries,
+	 * not the commits referenced by those entries.
+	 */
 	unsigned int	leak_pending:1;
 	/* --show-linear-break */
 	unsigned int	track_linear:1,

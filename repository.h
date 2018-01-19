@@ -4,6 +4,7 @@
 struct config_set;
 struct index_state;
 struct submodule_cache;
+struct git_hash_algo;
 
 struct repository {
 	/* Environment */
@@ -67,6 +68,9 @@ struct repository {
 	 */
 	struct index_state *index;
 
+	/* Repository's current hash algorithm, as serialized on disk. */
+	const struct git_hash_algo *hash_algo;
+
 	/* Configurations */
 	/*
 	 * Bit used during initialization to indicate if repository state (like
@@ -86,12 +90,21 @@ extern struct repository *the_repository;
 
 extern void repo_set_gitdir(struct repository *repo, const char *path);
 extern void repo_set_worktree(struct repository *repo, const char *path);
+extern void repo_set_hash_algo(struct repository *repo, int algo);
 extern int repo_init(struct repository *repo, const char *gitdir, const char *worktree);
 extern int repo_submodule_init(struct repository *submodule,
 			       struct repository *superproject,
 			       const char *path);
 extern void repo_clear(struct repository *repo);
 
+/*
+ * Populates the repository's index from its index_file, an index struct will
+ * be allocated if needed.
+ *
+ * Return the number of index entries in the populated index or a value less
+ * than zero if an error occured.  If the repository's index has already been
+ * populated then the number of entries will simply be returned.
+ */
 extern int repo_read_index(struct repository *repo);
 
 #endif /* REPOSITORY_H */

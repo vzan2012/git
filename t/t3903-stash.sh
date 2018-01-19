@@ -444,6 +444,14 @@ test_expect_failure 'stash file to directory' '
 	test foo = "$(cat file/file)"
 '
 
+test_expect_success 'stash create - no changes' '
+	git stash clear &&
+	test_when_finished "git reset --hard HEAD" &&
+	git reset --hard &&
+	git stash create >actual &&
+	test_must_be_empty actual
+'
+
 test_expect_success 'stash branch - no stashes on stack, stash-like argument' '
 	git stash clear &&
 	test_when_finished "git reset --hard HEAD" &&
@@ -648,6 +656,20 @@ test_expect_success 'stash branch should not drop the stash if the branch exists
 	git rev-parse stash@{0} --
 '
 
+test_expect_success 'stash branch should not drop the stash if the apply fails' '
+	git stash clear &&
+	git reset HEAD~1 --hard &&
+	echo foo >file &&
+	git add file &&
+	git commit -m initial &&
+	echo bar >file &&
+	git stash &&
+	echo baz >file &&
+	test_when_finished "git checkout master" &&
+	test_must_fail git stash branch new_branch stash@{0} &&
+	git rev-parse stash@{0} --
+'
+
 test_expect_success 'stash apply shows status same as git status (relative to current directory)' '
 	git stash clear &&
 	echo 1 >subdir/subfile1 &&
@@ -782,6 +804,99 @@ test_expect_success 'push -m shows right message' '
 	test_cmp expect actual
 '
 
+test_expect_success 'push -m also works without space' '
+	>foo &&
+	git add foo &&
+	git stash push -m"unspaced test message" &&
+	echo "stash@{0}: On master: unspaced test message" >expect &&
+	git stash list -1 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'store -m foo shows right message' '
+	git stash clear &&
+	git reset --hard &&
+	echo quux >bazzy &&
+	git add bazzy &&
+	STASH_ID=$(git stash create) &&
+	git stash store -m "store m" $STASH_ID &&
+	echo "stash@{0}: store m" >expect &&
+	git stash list -1 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'store -mfoo shows right message' '
+	git stash clear &&
+	git reset --hard &&
+	echo quux >bazzy &&
+	git add bazzy &&
+	STASH_ID=$(git stash create) &&
+	git stash store -m"store mfoo" $STASH_ID &&
+	echo "stash@{0}: store mfoo" >expect &&
+	git stash list -1 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'store --message=foo shows right message' '
+	git stash clear &&
+	git reset --hard &&
+	echo quux >bazzy &&
+	git add bazzy &&
+	STASH_ID=$(git stash create) &&
+	git stash store --message="store message=foo" $STASH_ID &&
+	echo "stash@{0}: store message=foo" >expect &&
+	git stash list -1 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'store --message foo shows right message' '
+	git stash clear &&
+	git reset --hard &&
+	echo quux >bazzy &&
+	git add bazzy &&
+	STASH_ID=$(git stash create) &&
+	git stash store --message "store message foo" $STASH_ID &&
+	echo "stash@{0}: store message foo" >expect &&
+	git stash list -1 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'push -mfoo uses right message' '
+	>foo &&
+	git add foo &&
+	git stash push -m"test mfoo" &&
+	echo "stash@{0}: On master: test mfoo" >expect &&
+	git stash list -1 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'push --message foo is synonym for -mfoo' '
+	>foo &&
+	git add foo &&
+	git stash push --message "test message foo" &&
+	echo "stash@{0}: On master: test message foo" >expect &&
+	git stash list -1 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'push --message=foo is synonym for -mfoo' '
+	>foo &&
+	git add foo &&
+	git stash push --message="test message=foo" &&
+	echo "stash@{0}: On master: test message=foo" >expect &&
+	git stash list -1 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'push -m shows right message' '
+	>foo &&
+	git add foo &&
+	git stash push -m "test m foo" &&
+	echo "stash@{0}: On master: test m foo" >expect &&
+	git stash list -1 >actual &&
+	test_cmp expect actual
+'
+
 test_expect_success 'create stores correct message' '
 	>foo &&
 	git add foo &&
@@ -796,6 +911,18 @@ test_expect_success 'create with multiple arguments for the message' '
 	git add foo &&
 	STASH_ID=$(git stash create test untracked) &&
 	echo "On master: test untracked" >expect &&
+	git show --pretty=%s -s ${STASH_ID} >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'create in a detached state' '
+	test_when_finished "git checkout master" &&
+	git checkout HEAD~1 &&
+	>foo &&
+	git add foo &&
+	STASH_ID=$(git stash create) &&
+	HEAD_ID=$(git rev-parse --short HEAD) &&
+	echo "WIP on (no branch): ${HEAD_ID} initial" >expect &&
 	git show --pretty=%s -s ${STASH_ID} >actual &&
 	test_cmp expect actual
 '

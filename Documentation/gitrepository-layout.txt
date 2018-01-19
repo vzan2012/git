@@ -71,7 +71,7 @@ objects/info/packs::
 	This file is to help dumb transports discover what packs
 	are available in this object store.  Whenever a pack is
 	added or removed, `git update-server-info` should be run
-	to keep this file up-to-date if the repository is
+	to keep this file up to date if the repository is
 	published for dumb transports.  'git repack' does this
 	by default.
 
@@ -207,6 +207,10 @@ info/exclude::
 	ignore file.  'git status', 'git add', 'git rm' and
 	'git clean' look at it but the core Git commands do not look
 	at it.  See also: linkgit:gitignore[5].
+
+info/attributes::
+	Defines which attributes to assign to a path, similar to per-directory
+	`.gitattributes` files.   See also: linkgit:gitattributes[5].
 
 info/sparse-checkout::
 	This file stores sparse checkout patterns.

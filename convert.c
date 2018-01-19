@@ -220,18 +220,27 @@ static void check_safe_crlf(const char *path, enum crlf_action crlf_action,
 	}
 }
 
-static int has_cr_in_index(const struct index_state *istate, const char *path)
+static int has_crlf_in_index(const struct index_state *istate, const char *path)
 {
 	unsigned long sz;
 	void *data;
-	int has_cr;
+	const char *crp;
+	int has_crlf = 0;
 
 	data = read_blob_data_from_index(istate, path, &sz);
 	if (!data)
 		return 0;
-	has_cr = memchr(data, '\r', sz) != NULL;
+
+	crp = memchr(data, '\r', sz);
+	if (crp) {
+		unsigned int ret_stats;
+		ret_stats = gather_convert_stats(data, sz);
+		if (!(ret_stats & CONVERT_STAT_BITS_BIN) &&
+		    (ret_stats & CONVERT_STAT_BITS_TXT_CRLF))
+			has_crlf = 1;
+	}
 	free(data);
-	return has_cr;
+	return has_crlf;
 }
 
 static int will_convert_lf_to_crlf(size_t len, struct text_stat *stats,
@@ -290,7 +299,7 @@ static int crlf_to_git(const struct index_state *istate,
 		 * cherry-pick.
 		 */
 		if ((checksafe != SAFE_CRLF_RENORMALIZE) &&
-		    has_cr_in_index(istate, path))
+		    has_crlf_in_index(istate, path))
 			convert_crlf_into_lf = 0;
 	}
 	if ((checksafe == SAFE_CRLF_WARN ||
@@ -423,8 +432,10 @@ static int filter_buffer_or_fd(int in, int out, void *data)
 	child_process.in = -1;
 	child_process.out = out;
 
-	if (start_command(&child_process))
+	if (start_command(&child_process)) {
+		strbuf_release(&cmd);
 		return error("cannot fork to run external filter '%s'", params->cmd);
+	}
 
 	sigchain_push(SIGPIPE, SIG_IGN);
 
@@ -564,8 +575,7 @@ static int apply_multi_file_filter(const char *path, const char *src, size_t len
 
 	if (!subprocess_map_initialized) {
 		subprocess_map_initialized = 1;
-		hashmap_init(&subprocess_map, (hashmap_cmp_fn) cmd2process_cmp,
-			     NULL, 0);
+		hashmap_init(&subprocess_map, cmd2process_cmp, NULL, 0);
 		entry = NULL;
 	} else {
 		entry = (struct cmd2process *)subprocess_find_entry(&subprocess_map, cmd);
@@ -1041,7 +1051,6 @@ static void convert_attrs(struct conv_attrs *ca, const char *path)
 		ca->crlf_action = git_path_check_crlf(ccheck + 4);
 		if (ca->crlf_action == CRLF_UNDEFINED)
 			ca->crlf_action = git_path_check_crlf(ccheck + 0);
-		ca->attr_action = ca->crlf_action;
 		ca->ident = git_path_check_ident(ccheck + 1);
 		ca->drv = git_path_check_convert(ccheck + 2);
 		if (ca->crlf_action != CRLF_BINARY) {
@@ -1055,12 +1064,14 @@ static void convert_attrs(struct conv_attrs *ca, const char *path)
 			else if (eol_attr == EOL_CRLF)
 				ca->crlf_action = CRLF_TEXT_CRLF;
 		}
-		ca->attr_action = ca->crlf_action;
 	} else {
 		ca->drv = NULL;
 		ca->crlf_action = CRLF_UNDEFINED;
 		ca->ident = 0;
 	}
+
+	/* Save attr and make a decision for action */
+	ca->attr_action = ca->crlf_action;
 	if (ca->crlf_action == CRLF_TEXT)
 		ca->crlf_action = text_eol_is_crlf() ? CRLF_TEXT_CRLF : CRLF_TEXT_INPUT;
 	if (ca->crlf_action == CRLF_UNDEFINED && auto_crlf == AUTO_CRLF_FALSE)
@@ -1543,8 +1554,9 @@ static int ident_filter_fn(struct stream_filter *filter,
 		switch (ident->state) {
 		default:
 			strbuf_add(&ident->left, head, ident->state);
+			/* fallthrough */
 		case IDENT_SKIPPING:
-			/* fallthru */
+			/* fallthrough */
 		case IDENT_DRAINING:
 			ident_drain(ident, &output, osize_p);
 		}

@@ -9,7 +9,7 @@
 #include "config.h"
 
 static const char * const prune_usage[] = {
-	N_("git prune [-n] [-v] [--expire <time>] [--] [<head>...]"),
+	N_("git prune [-n] [-v] [--progress] [--expire <time>] [--] [<head>...]"),
 	NULL
 };
 static int show_only;
@@ -141,7 +141,7 @@ int cmd_prune(int argc, const char **argv, const char *prefix)
 	if (show_progress == -1)
 		show_progress = isatty(2);
 	if (show_progress)
-		progress = start_progress_delay(_("Checking connectivity"), 0, 0, 2);
+		progress = start_delayed_progress(_("Checking connectivity"), 0);
 
 	mark_reachable_objects(&revs, 1, expire, progress);
 	stop_progress(&progress);

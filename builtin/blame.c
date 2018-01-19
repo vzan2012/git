@@ -488,7 +488,7 @@ static int read_ancestry(const char *graft_file)
 		return -1;
 	while (!strbuf_getwholeline(&buf, fp, '\n')) {
 		/* The format is just "Commit Parent1 Parent2 ...\n" */
-		struct commit_graft *graft = read_graft_line(buf.buf, buf.len);
+		struct commit_graft *graft = read_graft_line(&buf);
 		if (graft)
 			register_commit_graft(graft, 0);
 	}
@@ -708,8 +708,8 @@ int cmd_blame(int argc, const char **argv, const char *prefix)
 	git_config(git_blame_config, &output_option);
 	init_revisions(&revs, NULL);
 	revs.date_mode = blame_date_mode;
-	DIFF_OPT_SET(&revs.diffopt, ALLOW_TEXTCONV);
-	DIFF_OPT_SET(&revs.diffopt, FOLLOW_RENAMES);
+	revs.diffopt.flags.allow_textconv = 1;
+	revs.diffopt.flags.follow_renames = 1;
 
 	save_commit_buffer = 0;
 	dashdash_pos = 0;
@@ -734,9 +734,9 @@ int cmd_blame(int argc, const char **argv, const char *prefix)
 		parse_revision_opt(&revs, &ctx, options, blame_opt_usage);
 	}
 parse_done:
-	no_whole_file_rename = !DIFF_OPT_TST(&revs.diffopt, FOLLOW_RENAMES);
+	no_whole_file_rename = !revs.diffopt.flags.follow_renames;
 	xdl_opts |= revs.diffopt.xdl_opts & XDF_INDENT_HEURISTIC;
-	DIFF_OPT_CLR(&revs.diffopt, FOLLOW_RENAMES);
+	revs.diffopt.flags.follow_renames = 0;
 	argc = parse_options_end(&ctx);
 
 	if (incremental || (output_option & OUTPUT_PORCELAIN)) {
@@ -803,7 +803,7 @@ parse_done:
 	}
 	blame_date_width -= 1; /* strip the null */
 
-	if (DIFF_OPT_TST(&revs.diffopt, FIND_COPIES_HARDER))
+	if (revs.diffopt.flags.find_copies_harder)
 		opt |= (PICKAXE_BLAME_COPY | PICKAXE_BLAME_MOVE |
 			PICKAXE_BLAME_COPY_HARDER);
 
@@ -925,8 +925,7 @@ parse_done:
 	sb.found_guilty_entry = &found_guilty_entry;
 	sb.found_guilty_entry_data = &pi;
 	if (show_progress)
-		pi.progress = start_progress_delay(_("Blaming lines"),
-						   sb.num_lines, 50, 1);
+		pi.progress = start_delayed_progress(_("Blaming lines"), sb.num_lines);
 
 	assign_blame(&sb, opt);
 

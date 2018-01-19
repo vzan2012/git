@@ -12,7 +12,7 @@
 #include "builtin.h"
 #include "notes.h"
 #include "blob.h"
-#include "commit.h"
+#include "pretty.h"
 #include "refs.h"
 #include "exec_cmd.h"
 #include "run-command.h"
@@ -33,7 +33,7 @@ static const char * const git_notes_usage[] = {
 	N_("git notes merge --commit [-v | -q]"),
 	N_("git notes merge --abort [-v | -q]"),
 	N_("git notes [--ref <notes-ref>] remove [<object>...]"),
-	N_("git notes [--ref <notes-ref>] prune [-n | -v]"),
+	N_("git notes [--ref <notes-ref>] prune [-n] [-v]"),
 	N_("git notes [--ref <notes-ref>] get-ref"),
 	NULL
 };
@@ -328,6 +328,7 @@ static int notes_copy_from_stdin(int force, const char *rewrite_cmd)
 	} else {
 		finish_copy_notes_for_rewrite(c, msg);
 	}
+	strbuf_release(&buf);
 	return ret;
 }
 
@@ -456,7 +457,7 @@ static int add(int argc, const char **argv, const char *prefix)
 			oid_to_hex(&object));
 	}
 
-	prepare_note_data(&object, &d, note->hash);
+	prepare_note_data(&object, &d, note ? note->hash : NULL);
 	if (d.buf.len || allow_empty) {
 		write_note_data(&d, new_note.hash);
 		if (add_note(t, &object, &new_note, combine_notes_overwrite))
@@ -685,7 +686,7 @@ static int merge_abort(struct notes_merge_options *o)
 
 	if (delete_ref(NULL, "NOTES_MERGE_PARTIAL", NULL, 0))
 		ret += error(_("failed to delete ref NOTES_MERGE_PARTIAL"));
-	if (delete_ref(NULL, "NOTES_MERGE_REF", NULL, REF_NODEREF))
+	if (delete_ref(NULL, "NOTES_MERGE_REF", NULL, REF_NO_DEREF))
 		ret += error(_("failed to delete ref NOTES_MERGE_REF"));
 	if (notes_merge_abort(o))
 		ret += error(_("failed to remove 'git notes merge' worktree"));
@@ -723,7 +724,7 @@ static int merge_commit(struct notes_merge_options *o)
 	init_notes(t, "NOTES_MERGE_PARTIAL", combine_notes_overwrite, 0);
 
 	o->local_ref = local_ref_to_free =
-		resolve_refdup("NOTES_MERGE_REF", 0, oid.hash, NULL);
+		resolve_refdup("NOTES_MERGE_REF", 0, &oid, NULL);
 	if (!o->local_ref)
 		die(_("failed to resolve NOTES_MERGE_REF"));
 
@@ -735,8 +736,8 @@ static int merge_commit(struct notes_merge_options *o)
 	format_commit_message(partial, "%s", &msg, &pretty_ctx);
 	strbuf_trim(&msg);
 	strbuf_insert(&msg, 0, "notes: ", 7);
-	update_ref(msg.buf, o->local_ref, oid.hash,
-		   is_null_oid(&parent_oid) ? NULL : parent_oid.hash,
+	update_ref(msg.buf, o->local_ref, &oid,
+		   is_null_oid(&parent_oid) ? NULL : &parent_oid,
 		   0, UPDATE_REFS_DIE_ON_ERR);
 
 	free_notes(t);
@@ -849,12 +850,12 @@ static int merge(int argc, const char **argv, const char *prefix)
 
 	if (result >= 0) /* Merge resulted (trivially) in result_oid */
 		/* Update default notes ref with new commit */
-		update_ref(msg.buf, default_notes_ref(), result_oid.hash, NULL,
-			   0, UPDATE_REFS_DIE_ON_ERR);
+		update_ref(msg.buf, default_notes_ref(), &result_oid, NULL, 0,
+			   UPDATE_REFS_DIE_ON_ERR);
 	else { /* Merge has unresolved conflicts */
 		const struct worktree *wt;
 		/* Update .git/NOTES_MERGE_PARTIAL with partial merge result */
-		update_ref(msg.buf, "NOTES_MERGE_PARTIAL", result_oid.hash, NULL,
+		update_ref(msg.buf, "NOTES_MERGE_PARTIAL", &result_oid, NULL,
 			   0, UPDATE_REFS_DIE_ON_ERR);
 		/* Store ref-to-be-updated into .git/NOTES_MERGE_REF */
 		wt = find_shared_symref("NOTES_MERGE_REF", default_notes_ref());
@@ -864,10 +865,10 @@ static int merge(int argc, const char **argv, const char *prefix)
 		if (create_symref("NOTES_MERGE_REF", default_notes_ref(), NULL))
 			die(_("failed to store link to current notes ref (%s)"),
 			    default_notes_ref());
-		printf(_("Automatic notes merge failed. Fix conflicts in %s and "
-			 "commit the result with 'git notes merge --commit', or "
-			 "abort the merge with 'git notes merge --abort'.\n"),
-		       git_path(NOTES_MERGE_WORKTREE));
+		fprintf(stderr, _("Automatic notes merge failed. Fix conflicts in %s "
+				  "and commit the result with 'git notes merge --commit', "
+				  "or abort the merge with 'git notes merge --abort'.\n"),
+			git_path(NOTES_MERGE_WORKTREE));
 	}
 
 	free_notes(t);

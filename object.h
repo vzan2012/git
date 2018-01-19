@@ -38,6 +38,7 @@ struct object_array {
  * http-push.c:                            16-----19
  * commit.c:                               16-----19
  * sha1_name.c:                                     20
+ * list-objects-filter.c:                             21
  * builtin/fsck.c:  0--3
  */
 #define FLAG_BITS  27
@@ -115,6 +116,14 @@ int object_list_contains(struct object_list *list, struct object *obj);
 /* Object array handling .. */
 void add_object_array(struct object *obj, const char *name, struct object_array *array);
 void add_object_array_with_path(struct object *obj, const char *name, struct object_array *array, unsigned mode, const char *path);
+
+/*
+ * Returns NULL if the array is empty. Otherwise, returns the last object
+ * after removing its entry from the array. Other resources associated
+ * with that object are left in an unspecified state and should not be
+ * examined.
+ */
+struct object *object_array_pop(struct object_array *array);
 
 typedef int (*object_array_each_func_t)(struct object_array_entry *, void *);
 

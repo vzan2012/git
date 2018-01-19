@@ -17,6 +17,7 @@
 #include "prio-queue.h"
 #include "sha1-array.h"
 #include "oidset.h"
+#include "packfile.h"
 
 static int transfer_unpack_limit = -1;
 static int fetch_unpack_limit = -1;
@@ -610,7 +611,7 @@ static int tip_oids_contain(struct oidset *tip_oids,
 	 * add to "newlist" between calls, the additions will always be for
 	 * oids that are already in the set.
 	 */
-	if (!tip_oids->map.tablesize) {
+	if (!tip_oids->map.map.tablesize) {
 		add_refs_to_oidset(tip_oids, unmatched);
 		add_refs_to_oidset(tip_oids, newlist);
 	}
@@ -712,10 +713,12 @@ static int everything_local(struct fetch_pack_args *args,
 
 	save_commit_buffer = 0;
 
+	enable_fscache(1);
 	for (ref = *refs; ref; ref = ref->next) {
 		struct object *o;
 
-		if (!has_object_file(&ref->old_oid))
+		if (!has_object_file_with_flags(&ref->old_oid,
+						OBJECT_INFO_QUICK))
 			continue;
 
 		o = parse_object(&ref->old_oid);
@@ -732,6 +735,7 @@ static int everything_local(struct fetch_pack_args *args,
 				cutoff = commit->date;
 		}
 	}
+	enable_fscache(0);
 
 	if (!args->deepen) {
 		for_each_ref(mark_complete_oid, NULL);
